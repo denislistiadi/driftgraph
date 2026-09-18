@@ -1,5 +1,8 @@
 name: 'Driftgraph'
 description: 'Automated architecture visualizer and gatekeeper for Pull Requests'
+branding:
+  icon: 'git-merge'
+  color: 'blue'
 inputs:
   github-token:
     description: 'GitHub token for reading PR data and posting comments'
