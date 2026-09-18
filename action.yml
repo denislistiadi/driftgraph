@@ -1,0 +1,12 @@
+name: 'Driftgraph'
+description: 'Automated architecture visualizer and gatekeeper for Pull Requests'
+inputs:
+  github-token:
+    description: 'GitHub token for reading PR data and posting comments'
+    required: true
+  rules-file:
+    description: 'Path to architecture rules file (e.g., .driftgraph.yml). If not provided, gatekeeping is skipped.'
+    required: false
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
