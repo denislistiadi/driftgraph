@@ -25,7 +25,6 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     
-    # Required permissions to post comments on the PR
     permissions:
       pull-requests: write
       contents: read
@@ -34,10 +33,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Important: Required to fetch the base branch for comparison
+          fetch-depth: 0 
 
       - name: Run Driftgraph
-        uses: denislistiadi/driftgraph@v1.0.1 # Replace with your published repository and version
+        uses: denislistiadi/driftgraph@v1.0.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
