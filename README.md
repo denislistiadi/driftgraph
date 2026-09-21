@@ -1,5 +1,7 @@
 # Driftgraph
 
+![Works with GitHub](https://img.shields.io/badge/Works%20with-GitHub-100000?style=for-the-badge&logo=github&logoColor=white)
+
 Driftgraph is a custom GitHub Action that automatically visualizes architecture changes and enforces boundary rules on your Pull Requests. It reads your codebase and posts a Mermaid.js diagram directly into the PR comment.
 
 ## How to Use
@@ -35,7 +37,7 @@ jobs:
           fetch-depth: 0 # Important: Required to fetch the base branch for comparison
 
       - name: Run Driftgraph
-        uses: denislistiadi/driftgraph@v1.0.0 # Replace with your published repository and version
+        uses: denislistiadi/driftgraph@v1.0.1 # Replace with your published repository and version
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
