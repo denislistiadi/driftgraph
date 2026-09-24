@@ -1,6 +1,6 @@
 {
   "name": "driftgraph",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Custom GitHub Action for automated architecture visualization and gatekeeping",
   "main": "dist/index.js",
   "scripts": {
