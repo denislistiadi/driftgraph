@@ -71,13 +71,13 @@ export function generateMermaid(graph: DiffGraph, maxNodes: number = 100): strin
       lines.push(`    ${src} ${arrow}${edgeLabel} ${tgt}`);
 
       if (edge.isViolation) {
-        linkStyles.push(`    linkStyle ${linkIndex} stroke:#cf222e,stroke-width:3px,color:#cf222e;`);
+        linkStyles.push(`    linkStyle ${linkIndex} stroke:#cf222e,stroke-width:3px,color:#cf222e`);
       } else if (edge.status === 'added') {
-        linkStyles.push(`    linkStyle ${linkIndex} stroke:#2ea043,stroke-width:2px;`);
+        linkStyles.push(`    linkStyle ${linkIndex} stroke:#2ea043,stroke-width:2px`);
       } else if (edge.status === 'removed') {
-        linkStyles.push(`    linkStyle ${linkIndex} stroke:#cf222e,stroke-width:2px,stroke-dasharray: 5 5;`);
+        linkStyles.push(`    linkStyle ${linkIndex} stroke:#cf222e,stroke-width:2px,stroke-dasharray: 5 5`);
       } else {
-        linkStyles.push(`    linkStyle ${linkIndex} stroke:#d0d7de;`);
+        linkStyles.push(`    linkStyle ${linkIndex} stroke:#d0d7de`);
       }
 
       linkIndex++;
