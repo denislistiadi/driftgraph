@@ -1,5 +1,6 @@
 name: 'Driftgraph'
 description: 'Automated architecture visualizer and gatekeeper for Pull Requests'
+author: 'Denis Listiadi'
 branding:
   icon: 'git-merge'
   color: 'blue'
@@ -8,8 +9,13 @@ inputs:
     description: 'GitHub token for reading PR data and posting comments'
     required: true
   rules-file:
-    description: 'Path to architecture rules file (e.g., .driftgraph.yml). If not provided, gatekeeping is skipped.'
+    description: 'Path to architecture rules file, relative to the repository root.'
     required: false
+    default: '.driftgraph.yml'
+  rules-source:
+    description: 'Read architecture rules from the base branch (recommended) or the PR head.'
+    required: false
+    default: 'base'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js'
