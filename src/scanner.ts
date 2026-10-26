@@ -1,6 +1,8 @@
-import { Project, SourceFile } from 'ts-morph';
+import { Project } from 'ts-morph';
 import * as path from 'path';
 import * as fs from 'fs';
+import fg from 'fast-glob';
+import { minimatch } from 'minimatch';
 
 export interface GraphNode {
   id: string;
@@ -16,13 +18,52 @@ export interface Graph {
   edges: GraphEdge[];
 }
 
+export const DEFAULT_IGNORES = [
+  '**/node_modules/**',
+  '**/.git/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/coverage/**',
+  '**/.next/**',
+  '**/.turbo/**',
+  '**/vendor/**',
+];
+
+function toPosix(filePath: string): string {
+  return filePath.split(path.sep).join('/');
+}
+
 /**
  * Normalizes a file path to use forward slashes and removes the base directory prefix.
  */
 function normalizePath(filePath: string, baseDir: string): string {
-  let relativePath = path.relative(baseDir, filePath);
-  // Ensure forward slashes for deterministic graph IDs
-  return relativePath.split(path.sep).join('/');
+  return toPosix(path.relative(baseDir, filePath));
+}
+
+function isOutsideRelativePath(relativePath: string): boolean {
+  return relativePath === '..' ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath);
+}
+
+function getRelativePath(filePath: string, rootDir: string): string | undefined {
+  const relativePath = path.relative(rootDir, filePath);
+
+  if (relativePath.length === 0 || isOutsideRelativePath(relativePath)) {
+    return undefined;
+  }
+
+  return toPosix(relativePath);
+}
+
+function isIgnoredRelativePath(relativePath: string): boolean {
+  return DEFAULT_IGNORES.some(pattern => minimatch(relativePath, pattern, { dot: true }));
+}
+
+function isPathIncluded(filePath: string, rootDir: string): boolean {
+  const relativePath = getRelativePath(filePath, rootDir);
+  return relativePath !== undefined && !isIgnoredRelativePath(relativePath);
 }
 
 /**
@@ -31,81 +72,85 @@ function normalizePath(filePath: string, baseDir: string): string {
  * @param tsconfigPath Optional path to a tsconfig.json file for path alias resolution
  */
 export function scanArchitecture(targetDir: string, tsconfigPath?: string): Graph {
+  const targetRoot = path.resolve(targetDir);
   const project = new Project({
     compilerOptions: {
       allowJs: true,
       resolveJsonModule: true,
     },
-    ...(tsconfigPath && fs.existsSync(tsconfigPath) ? { tsConfigFilePath: tsconfigPath } : {}),
+    ...(tsconfigPath && fs.existsSync(tsconfigPath)
+      ? { tsConfigFilePath: tsconfigPath, skipAddingFilesFromTsConfig: true }
+      : {}),
   });
 
-  project.addSourceFilesAtPaths(path.join(targetDir, '**/*.{ts,tsx,js,jsx}'));
+  const files = fg.sync('**/*.{ts,tsx,js,jsx}', {
+    cwd: targetRoot,
+    absolute: true,
+    dot: false,
+    followSymbolicLinks: false,
+    ignore: DEFAULT_IGNORES,
+  });
+
+  for (const filePath of files) {
+    const absolutePath = path.resolve(filePath);
+    if (isPathIncluded(absolutePath, targetRoot)) {
+      project.addSourceFileAtPath(absolutePath);
+    }
+  }
 
   const nodes: Map<string, GraphNode> = new Map();
   const edges: GraphEdge[] = [];
+  const edgeKeys = new Set<string>();
 
-  const sourceFiles = project.getSourceFiles();
+  const addNode = (id: string): void => {
+    if (!nodes.has(id)) {
+      nodes.set(id, { id });
+    }
+  };
 
-  for (const sourceFile of sourceFiles) {
-    if (!sourceFile.getFilePath().startsWith(targetDir) && !sourceFile.getFilePath().replace(/\\/g, '/').startsWith(targetDir.replace(/\\/g, '/'))) {
+  const addEdge = (source: string, target: string): void => {
+    const key = `${source}::${target}`;
+    if (!edgeKeys.has(key)) {
+      edgeKeys.add(key);
+      edges.push({ source, target });
+    }
+  };
+
+  for (const sourceFile of project.getSourceFiles()) {
+    const sourceFilePath = sourceFile.getFilePath();
+    if (!isPathIncluded(sourceFilePath, targetRoot)) {
       continue;
     }
 
-    const sourceId = normalizePath(sourceFile.getFilePath(), targetDir);
-    
-    if (!nodes.has(sourceId)) {
-      nodes.set(sourceId, { id: sourceId });
-    }
+    const sourceId = normalizePath(sourceFilePath, targetRoot);
+    addNode(sourceId);
 
-    const importDeclarations = sourceFile.getImportDeclarations();
-    for (const importDecl of importDeclarations) {
+    for (const importDecl of sourceFile.getImportDeclarations()) {
       const importedSourceFile = importDecl.getModuleSpecifierSourceFile();
-      
-      if (importedSourceFile) {
-        const isInternal = importedSourceFile.getFilePath().replace(/\\/g, '/').startsWith(targetDir.replace(/\\/g, '/'));
-        
-        if (isInternal) {
-          const targetId = normalizePath(importedSourceFile.getFilePath(), targetDir);
-          
-          if (!nodes.has(targetId)) {
-            nodes.set(targetId, { id: targetId });
-          }
 
-          edges.push({
-            source: sourceId,
-            target: targetId,
-          });
-        }
+      if (importedSourceFile && isPathIncluded(importedSourceFile.getFilePath(), targetRoot)) {
+        const targetId = normalizePath(importedSourceFile.getFilePath(), targetRoot);
+        addNode(targetId);
+        addEdge(sourceId, targetId);
       }
     }
 
-    const exportDeclarations = sourceFile.getExportDeclarations();
-    for (const exportDecl of exportDeclarations) {
-      if (exportDecl.hasModuleSpecifier()) {
-         const exportedSourceFile = exportDecl.getModuleSpecifierSourceFile();
-         if (exportedSourceFile) {
-           const isInternal = exportedSourceFile.getFilePath().replace(/\\/g, '/').startsWith(targetDir.replace(/\\/g, '/'));
-           if (isInternal) {
-             const targetId = normalizePath(exportedSourceFile.getFilePath(), targetDir);
-             
-             if (!nodes.has(targetId)) {
-               nodes.set(targetId, { id: targetId });
-             }
+    for (const exportDecl of sourceFile.getExportDeclarations()) {
+      if (!exportDecl.hasModuleSpecifier()) {
+        continue;
+      }
 
-             edges.push({
-               source: sourceId,
-               target: targetId,
-             });
-           }
-         }
+      const exportedSourceFile = exportDecl.getModuleSpecifierSourceFile();
+      if (exportedSourceFile && isPathIncluded(exportedSourceFile.getFilePath(), targetRoot)) {
+        const targetId = normalizePath(exportedSourceFile.getFilePath(), targetRoot);
+        addNode(targetId);
+        addEdge(sourceId, targetId);
       }
     }
   }
 
-  const uniqueEdges = Array.from(new Set(edges.map(e => JSON.stringify(e)))).map(e => JSON.parse(e));
-
   return {
     nodes: Array.from(nodes.values()).sort((a, b) => a.id.localeCompare(b.id)),
-    edges: uniqueEdges.sort((a, b) => a.source.localeCompare(b.source) || a.target.localeCompare(b.target)),
+    edges: edges.sort((a, b) => a.source.localeCompare(b.source) || a.target.localeCompare(b.target)),
   };
 }
